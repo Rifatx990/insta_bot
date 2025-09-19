@@ -1,2 +1,6 @@
-instagrapi==1.17.13
-Flask==3.0.3
+instagrapi==1.17.0
+pydantic==1.10.5
+requests[socks]
+pysocks
+flask
+Pillow>=8.1.1

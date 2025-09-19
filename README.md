@@ -22,8 +22,8 @@ This project is an **Instagram automation bot** that:
 
 1. Clone this repo:
    ```bash
-   git clone https://github.com/your-repo/insta-cmd-bot.git
-   cd insta-cmd-bot
+   git clone https://github.com/Rifatx990/insta_bot.git
+   cd insta_bot
 
 2. Install requirements:
 

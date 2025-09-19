@@ -5,7 +5,7 @@ import threading
 
 # ------------------- CMD INFO -------------------
 info = {
-    "name": "restart",
+    "name": "restart2",
     "version": "1.1",
     "author": "rifat",
     "role": 2,  # Admin only

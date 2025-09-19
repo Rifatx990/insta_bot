@@ -2,12 +2,20 @@ info = {
     "author": "RIFAT",
     "usage": "/help",
     "example": "/help",
-    "description": "Sends the list of installed commands with status, usage, example, and author via DM."
+    "description": "Sends a stylish DM listing all installed commands with status, usage, example, and author."
 }
 
-def run(cl, cmd_flags, cmd_name):
+import time
+from main import cmd_flags, cmd_info
+
+def run(cl, flags, cmd_name):
+    """
+    Sends a stylish DM with all installed commands, their status,
+    usage, example, and author.
+    """
     seen_msgs = set()
-    while cmd_flags[cmd_name]:
+
+    while flags[cmd_name]:
         try:
             threads = cl.direct_threads(amount=10)
         except Exception:
@@ -25,18 +33,22 @@ def run(cl, cmd_flags, cmd_name):
                 continue
 
             if msg_text == "/help":
-                text = f"📦 Total Commands: {len(cmd_flags)}\n\n"
-                for cmd, status in cmd_flags.items():
-                    cmd_mod_info = None
-                    try:
-                        cmd_mod_info = __import__(f"cmd.{cmd}", fromlist=["info"]).info
-                    except Exception:
-                        cmd_mod_info = {"author": "RIFAT", "usage": "N/A", "example": "N/A"}
+                text = "🎀📦 *RIFAT BOT HELP* 📦🎀\n\n"
+                text += f"🟢 Total Commands Installed: {len(cmd_flags)}\n\n"
 
-                    text += f"• {cmd} [{ 'ON' if status else 'OFF' }]\n"
-                    text += f"  Author: {cmd_mod_info.get('author', 'RIFAT')}\n"
-                    text += f"  Usage: {cmd_mod_info.get('usage', 'N/A')}\n"
-                    text += f"  Example: {cmd_mod_info.get('example', 'N/A')}\n\n"
+                for cmd, status in cmd_flags.items():
+                    cmd_data = cmd_info.get(cmd, {})
+                    author = cmd_data.get("author", "RIFAT")
+                    usage = cmd_data.get("usage", "N/A")
+                    example = cmd_data.get("example", "N/A")
+
+                    text += f"┌─💠 {cmd} [{ 'ON' if status else 'OFF' }]\n"
+                    text += f"│ Author : {author}\n"
+                    text += f"│ Usage  : {usage}\n"
+                    text += f"│ Example: {example}\n"
+                    text += "└───────────────\n\n"
+
+                text += "🌟 Developer: RIFAT 🌟"
 
                 try:
                     cl.direct_send(text, [sender_id])

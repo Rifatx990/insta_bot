@@ -15,8 +15,7 @@ SESSION_FILE = "session.json"
 # Examples:
 # PROXY = "socks5://127.0.0.1:9050"
 # PROXY = "socks5://user:pass@host:port"
-PROXY = "socks5://127.0.0.1:9050"   # <-- change here
-# PROXY = None
+PROXY = None
 
 bot_status = "🤖 Initializing bot..."
 sent_count = 0
@@ -73,6 +72,7 @@ login_instagram()
 cmd_folder = "cmd"
 cmd_threads = {}
 cmd_flags = {}
+cmd_info = {}  # store info like author, example, usage
 
 def load_cmds():
     """Dynamically load all CMDs from the cmd/ folder."""
@@ -91,9 +91,10 @@ def load_cmds():
                 spec = importlib.util.spec_from_file_location(cmd_name, path)
                 mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(mod)
-                if hasattr(mod, "run"):
+                if hasattr(mod, "run") and hasattr(mod, "info"):
                     cmd_flags[cmd_name] = False  # Default OFF
                     cmd_threads[cmd_name] = {"module": mod, "thread": None}
+                    cmd_info[cmd_name] = mod.info
                     loaded_cmds_count += 1
                     print(f"✅ Loaded CMD: {cmd_name}")
             except Exception as e:
@@ -102,23 +103,9 @@ def load_cmds():
     print(f"📦 Total commands loaded: {loaded_cmds_count}")
     return loaded_cmds_count
 
-# ------------------- CMD Runner -------------------
-def cmd_runner(cmd_name):
-    """Run a single command module in its own thread."""
-    mod = cmd_threads[cmd_name]["module"]
-    try:
-        mod.run(cl, cmd_flags, cmd_name)
-    except Exception as e:
-        print(f"❌ Error in CMD '{cmd_name}': {e}")
-    finally:
-        # Reset sender_id and args after CMD finishes
-        cmd_flags.pop(f"{cmd_name}_sender", None)
-        cmd_flags.pop(f"{cmd_name}_args", None)
-        cmd_flags[cmd_name] = False
-
 # ------------------- DM Command Listener -------------------
 def monitor_cmd_dms():
-    """Listen for /cmd commands in Instagram DMs."""
+    """Listen for /cmd on|off commands in Instagram DMs."""
     seen_msgs = set()
     while True:
         try:
@@ -138,25 +125,37 @@ def monitor_cmd_dms():
             if msg.id in seen_msgs or sender_id == cl.user_id:
                 continue
 
+            # Handle /cmd_name on/off [optional args]
             if msg_text.startswith("/"):
                 parts = msg_text.split()
-                cmd_name = parts[0][1:].lower()
-                args = parts[1:]
+                cmd_name = parts[0][1:]
+                args = parts[1:] if len(parts) > 1 else []
 
                 if cmd_name in cmd_threads:
-                    # Store sender_id and arguments for CMD access
-                    cmd_flags[f"{cmd_name}_sender"] = sender_id
-                    cmd_flags[f"{cmd_name}_args"] = args
-
-                    # Start CMD thread if not already running
-                    if not cmd_threads[cmd_name]["thread"] or not cmd_threads[cmd_name]["thread"].is_alive():
-                        cmd_flags[cmd_name] = True
+                    # Turn ON
+                    if len(args) >= 1 and args[0].lower() == "on" and not cmd_flags[cmd_name]:
+                        cmd_flags[cmd_name] = " ".join(args[1:]) if len(args) > 1 else True
                         t = threading.Thread(target=cmd_runner, args=(cmd_name,), daemon=True)
                         t.start()
                         cmd_threads[cmd_name]["thread"] = t
+                        cl.direct_send(f"✅ CMD '{cmd_name}' turned ON", [sender_id])
+
+                    # Turn OFF
+                    elif len(args) >= 1 and args[0].lower() == "off" and cmd_flags[cmd_name]:
+                        cmd_flags[cmd_name] = False
+                        cl.direct_send(f"❌ CMD '{cmd_name}' turned OFF", [sender_id])
 
             seen_msgs.add(msg.id)
         time.sleep(5)
+
+def cmd_runner(cmd_name):
+    """Run a single command module in its own thread."""
+    mod = cmd_threads[cmd_name]["module"]
+    try:
+        mod.run(cl, cmd_flags, cmd_name)
+    except Exception as e:
+        print(f"❌ Error in CMD '{cmd_name}': {e}")
+        cmd_flags[cmd_name] = False
 
 # ------------------- Flask API -------------------
 app = Flask(__name__)
@@ -170,7 +169,7 @@ def home():
         "logged_in_as": cl.username if hasattr(cl, "username") else None,
         "proxy": PROXY if PROXY else "Direct connection",
         "loaded_commands": loaded_cmds_count,
-        "cmds": {k: "ON" if v else "OFF" for k, v in cmd_flags.items() if not k.endswith("_sender") and not k.endswith("_args")}
+        "cmds": {k: "ON" if v else "OFF" for k, v in cmd_flags.items()}
     })
 
 # ------------------- Run Bot -------------------

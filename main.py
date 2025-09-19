@@ -102,9 +102,23 @@ def load_cmds():
     print(f"📦 Total commands loaded: {loaded_cmds_count}")
     return loaded_cmds_count
 
+# ------------------- CMD Runner -------------------
+def cmd_runner(cmd_name):
+    """Run a single command module in its own thread."""
+    mod = cmd_threads[cmd_name]["module"]
+    try:
+        mod.run(cl, cmd_flags, cmd_name)
+    except Exception as e:
+        print(f"❌ Error in CMD '{cmd_name}': {e}")
+    finally:
+        # Reset sender_id and args after CMD finishes
+        cmd_flags.pop(f"{cmd_name}_sender", None)
+        cmd_flags.pop(f"{cmd_name}_args", None)
+        cmd_flags[cmd_name] = False
+
 # ------------------- DM Command Listener -------------------
 def monitor_cmd_dms():
-    """Listen for /cmd on|off commands in Instagram DMs."""
+    """Listen for /cmd commands in Instagram DMs."""
     seen_msgs = set()
     while True:
         try:
@@ -119,39 +133,30 @@ def monitor_cmd_dms():
                 continue
             msg = thread.messages[0]
             sender_id = msg.user_id
-            msg_text = (msg.text or "").strip().lower()
+            msg_text = (msg.text or "").strip()
 
             if msg.id in seen_msgs or sender_id == cl.user_id:
                 continue
 
             if msg_text.startswith("/"):
                 parts = msg_text.split()
-                if len(parts) == 2:
-                    cmd_name = parts[0][1:]
-                    action = parts[1]
+                cmd_name = parts[0][1:].lower()
+                args = parts[1:]
 
-                    if cmd_name in cmd_threads:
-                        if action == "on" and not cmd_flags[cmd_name]:
-                            cmd_flags[cmd_name] = True
-                            t = threading.Thread(target=cmd_runner, args=(cmd_name,), daemon=True)
-                            t.start()
-                            cmd_threads[cmd_name]["thread"] = t
-                            cl.direct_send(f"✅ CMD '{cmd_name}' turned ON", [sender_id])
-                        elif action == "off" and cmd_flags[cmd_name]:
-                            cmd_flags[cmd_name] = False
-                            cl.direct_send(f"❌ CMD '{cmd_name}' turned OFF", [sender_id])
+                if cmd_name in cmd_threads:
+                    # Store sender_id and arguments for CMD access
+                    cmd_flags[f"{cmd_name}_sender"] = sender_id
+                    cmd_flags[f"{cmd_name}_args"] = args
+
+                    # Start CMD thread if not already running
+                    if not cmd_threads[cmd_name]["thread"] or not cmd_threads[cmd_name]["thread"].is_alive():
+                        cmd_flags[cmd_name] = True
+                        t = threading.Thread(target=cmd_runner, args=(cmd_name,), daemon=True)
+                        t.start()
+                        cmd_threads[cmd_name]["thread"] = t
 
             seen_msgs.add(msg.id)
         time.sleep(5)
-
-def cmd_runner(cmd_name):
-    """Run a single command module in its own thread."""
-    mod = cmd_threads[cmd_name]["module"]
-    try:
-        mod.run(cl, cmd_flags, cmd_name)
-    except Exception as e:
-        print(f"❌ Error in CMD '{cmd_name}': {e}")
-        cmd_flags[cmd_name] = False  # reset state on crash
 
 # ------------------- Flask API -------------------
 app = Flask(__name__)
@@ -165,12 +170,12 @@ def home():
         "logged_in_as": cl.username if hasattr(cl, "username") else None,
         "proxy": PROXY if PROXY else "Direct connection",
         "loaded_commands": loaded_cmds_count,
-        "cmds": {k: "ON" if v else "OFF" for k, v in cmd_flags.items()}
+        "cmds": {k: "ON" if v else "OFF" for k, v in cmd_flags.items() if not k.endswith("_sender") and not k.endswith("_args")}
     })
 
 # ------------------- Run Bot -------------------
 if __name__ == "__main__":
-    total_cmds = load_cmds()   # Auto load on startup
+    total_cmds = load_cmds()
     print(f"🚀 Bot started with {total_cmds} command(s) loaded.")
     threading.Thread(target=monitor_cmd_dms, daemon=True).start()
     app.run(host="0.0.0.0", port=8080)

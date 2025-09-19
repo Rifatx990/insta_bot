@@ -14,17 +14,17 @@ SESSION_FILE = "session.json"
 # Proxy setup (leave None for direct connection)
 PROXY = None  # e.g., "socks5://127.0.0.1:9050"
 
+# Multiple admins
+ADMIN_BOT = ["h4x_r1fa7", "another_admin"]  # keep as ADMIN_BOT
+ROLE_ADMIN = 2
+ROLE_USER = 1
+
 bot_status = "🤖 Initializing bot..."
 sent_count = 0
 loaded_cmds_count = 0
 
-# ------------------- ADMIN & ROLE SYSTEM -------------------
-ADMIN_BOT = "h4x_r1fa7"   # <-- Instagram username of bot admin
-ROLE_ADMIN = 2
-ROLE_USER = 1
-
-user_roles = {}  # dictionary to store roles per user_id
-# Example: user_roles[sender_id] = ROLE_ADMIN or ROLE_USER
+# ------------------- User Roles -------------------
+user_roles = {}  # sender_id -> ROLE_ADMIN or ROLE_USER
 
 # ------------------- Instagram Client Setup -------------------
 cl = Client()
@@ -46,18 +46,21 @@ def setup_proxy():
 def login_instagram():
     global bot_status
     setup_proxy()
+
+    # Try to restore session first
     if os.path.exists(SESSION_FILE):
         try:
             with open(SESSION_FILE, "r") as f:
                 session = json.load(f)
             cl.set_settings(session)
-            cl.get_timeline_feed()
+            cl.get_timeline_feed()  # test if session works
             bot_status = f"✅ Restored session as {cl.username}"
             print(bot_status)
             return
         except Exception as e:
             print(f"⚠️ Session restore failed: {e}")
 
+    # Fallback to fresh login
     try:
         cl.login(USERNAME, PASSWORD)
         cl.dump_settings(SESSION_FILE)
@@ -73,7 +76,7 @@ login_instagram()
 cmd_folder = "cmd"
 cmd_threads = {}
 cmd_flags = {}
-cmd_info = {}  # store info like author, example, usage
+cmd_info = {}
 
 def load_cmds():
     global loaded_cmds_count
@@ -92,7 +95,7 @@ def load_cmds():
                 mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(mod)
                 if hasattr(mod, "run") and hasattr(mod, "info"):
-                    cmd_flags[cmd_name] = False  # Default OFF
+                    cmd_flags[cmd_name] = False
                     cmd_threads[cmd_name] = {"module": mod, "thread": None}
                     cmd_info[cmd_name] = mod.info
                     loaded_cmds_count += 1
@@ -103,9 +106,16 @@ def load_cmds():
     print(f"📦 Total commands loaded: {loaded_cmds_count}")
     return loaded_cmds_count
 
+def cmd_runner(cmd_name):
+    mod = cmd_threads[cmd_name]["module"]
+    try:
+        mod.run(cl, cmd_flags, cmd_name)
+    except Exception as e:
+        print(f"❌ Error in CMD '{cmd_name}': {e}")
+        cmd_flags[cmd_name] = False
+
 # ------------------- DM Command Listener -------------------
 def monitor_cmd_dms():
-    """Listen for /cmd on|off commands in Instagram DMs."""
     seen_msgs = set()
     while True:
         try:
@@ -125,10 +135,10 @@ def monitor_cmd_dms():
             if msg.id in seen_msgs or sender_id == cl.user_id:
                 continue
 
-            # Determine user role
+            # Determine role
             if sender_id not in user_roles:
                 username = cl.user_info(sender_id).username
-                user_roles[sender_id] = ROLE_ADMIN if username == ADMIN_BOT else ROLE_USER
+                user_roles[sender_id] = ROLE_ADMIN if username in ADMIN_BOT else ROLE_USER
 
             role = user_roles[sender_id]
 
@@ -138,7 +148,7 @@ def monitor_cmd_dms():
                 args = parts[1:] if len(parts) > 1 else []
 
                 if cmd_name in cmd_threads:
-                    # Restrict certain commands to admin only
+                    # Admin-only check
                     if getattr(cmd_threads[cmd_name]["module"], "admin_only", False) and role != ROLE_ADMIN:
                         cl.direct_send(f"❌ You are not allowed to use '{cmd_name}'. Admin only.", [sender_id])
                         seen_msgs.add(msg.id)
@@ -159,14 +169,6 @@ def monitor_cmd_dms():
 
             seen_msgs.add(msg.id)
         time.sleep(5)
-
-def cmd_runner(cmd_name):
-    mod = cmd_threads[cmd_name]["module"]
-    try:
-        mod.run(cl, cmd_flags, cmd_name)
-    except Exception as e:
-        print(f"❌ Error in CMD '{cmd_name}': {e}")
-        cmd_flags[cmd_name] = False
 
 # ------------------- Flask API -------------------
 app = Flask(__name__)

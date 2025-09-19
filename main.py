@@ -7,8 +7,8 @@ from flask import Flask, jsonify
 from instagrapi import Client
 
 # ------------------- CONFIG -------------------
-USERNAME = "your_username"
-PASSWORD = "your_password"
+USERNAME = "bot_id_username"
+PASSWORD = "bot_id_password"
 SESSION_FILE = "session.json"
 
 # Proxy setup (leave None for direct connection)
@@ -19,7 +19,7 @@ sent_count = 0
 loaded_cmds_count = 0
 
 # ------------------- ADMIN & ROLE SYSTEM -------------------
-ADMIN_BOT = "your_username"   # <-- Instagram username of bot admin
+ADMIN_BOT = "h4x_r1fa7"   # <-- Instagram username of bot admin
 ROLE_ADMIN = 2
 ROLE_USER = 1
 

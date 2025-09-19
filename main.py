@@ -11,21 +11,25 @@ USERNAME = "your_username"
 PASSWORD = "your_password"
 SESSION_FILE = "session.json"
 
-# 🔑 Set your proxy directly here (leave as None for direct connection)
-# Examples:
-# PROXY = "socks5://127.0.0.1:9050"
-# PROXY = "socks5://user:pass@host:port"
-PROXY = None
+# Proxy setup (leave None for direct connection)
+PROXY = None  # e.g., "socks5://127.0.0.1:9050"
 
 bot_status = "🤖 Initializing bot..."
 sent_count = 0
 loaded_cmds_count = 0
 
+# ------------------- ADMIN & ROLE SYSTEM -------------------
+ADMIN_BOT = "your_username"   # <-- Instagram username of bot admin
+ROLE_ADMIN = 2
+ROLE_USER = 1
+
+user_roles = {}  # dictionary to store roles per user_id
+# Example: user_roles[sender_id] = ROLE_ADMIN or ROLE_USER
+
 # ------------------- Instagram Client Setup -------------------
 cl = Client()
 
 def setup_proxy():
-    """Setup proxy if provided."""
     global bot_status
     if PROXY:
         try:
@@ -40,23 +44,20 @@ def setup_proxy():
         print(bot_status)
 
 def login_instagram():
-    """Login with saved session if possible, otherwise fresh login."""
     global bot_status
     setup_proxy()
-
     if os.path.exists(SESSION_FILE):
         try:
             with open(SESSION_FILE, "r") as f:
                 session = json.load(f)
             cl.set_settings(session)
-            cl.get_timeline_feed()  # test session
+            cl.get_timeline_feed()
             bot_status = f"✅ Restored session as {cl.username}"
             print(bot_status)
             return
         except Exception as e:
             print(f"⚠️ Session restore failed: {e}")
 
-    # fallback login
     try:
         cl.login(USERNAME, PASSWORD)
         cl.dump_settings(SESSION_FILE)
@@ -75,7 +76,6 @@ cmd_flags = {}
 cmd_info = {}  # store info like author, example, usage
 
 def load_cmds():
-    """Dynamically load all CMDs from the cmd/ folder."""
     global loaded_cmds_count
     loaded_cmds_count = 0
 
@@ -125,13 +125,25 @@ def monitor_cmd_dms():
             if msg.id in seen_msgs or sender_id == cl.user_id:
                 continue
 
-            # Handle /cmd_name on/off [optional args]
+            # Determine user role
+            if sender_id not in user_roles:
+                username = cl.user_info(sender_id).username
+                user_roles[sender_id] = ROLE_ADMIN if username == ADMIN_BOT else ROLE_USER
+
+            role = user_roles[sender_id]
+
             if msg_text.startswith("/"):
                 parts = msg_text.split()
                 cmd_name = parts[0][1:]
                 args = parts[1:] if len(parts) > 1 else []
 
                 if cmd_name in cmd_threads:
+                    # Restrict certain commands to admin only
+                    if getattr(cmd_threads[cmd_name]["module"], "admin_only", False) and role != ROLE_ADMIN:
+                        cl.direct_send(f"❌ You are not allowed to use '{cmd_name}'. Admin only.", [sender_id])
+                        seen_msgs.add(msg.id)
+                        continue
+
                     # Turn ON
                     if len(args) >= 1 and args[0].lower() == "on" and not cmd_flags[cmd_name]:
                         cmd_flags[cmd_name] = " ".join(args[1:]) if len(args) > 1 else True
@@ -149,7 +161,6 @@ def monitor_cmd_dms():
         time.sleep(5)
 
 def cmd_runner(cmd_name):
-    """Run a single command module in its own thread."""
     mod = cmd_threads[cmd_name]["module"]
     try:
         mod.run(cl, cmd_flags, cmd_name)

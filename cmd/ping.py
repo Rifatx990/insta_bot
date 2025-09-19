@@ -39,13 +39,18 @@ def run(cl, cmd_flags, cmd_name):
     uptime = datetime.now() - bot_start_time
     uptime_str = str(uptime).split(".")[0]  # remove microseconds
 
+    # Stylish response with emojis and box-style formatting
     response = (
-        f"📡 **Bot Status**\n"
-        f"🤖 Status: {bot_status}\n"
-        f"⏱ Uptime: {uptime_str}\n"
-        f"📦 Loaded Commands: {loaded_cmds_count}\n"
-        f"🌐 Proxy: {PROXY if PROXY else 'Direct connection'}\n"
-        f"💻 Logged in as: {main_cl.username if hasattr(main_cl, 'username') else 'N/A'}"
+        "╔════════════════════╗\n"
+        "║ 📡 BOT STATUS PING ║\n"
+        "╠════════════════════╣\n"
+        f"║ 🤖 Status        : {bot_status}\n"
+        f"║ ⏱ Uptime        : {uptime_str}\n"
+        f"║ 📦 Loaded CMDs   : {loaded_cmds_count}\n"
+        f"║ 🌐 Proxy        : {PROXY if PROXY else 'Direct connection'}\n"
+        f"║ 💻 Logged in as  : {main_cl.username if hasattr(main_cl, 'username') else 'N/A'}\n"
+        "╚════════════════════╝\n"
+        "✨ Developed by RIFAT"
     )
 
     # Send response via DM
